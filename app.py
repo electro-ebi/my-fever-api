@@ -1,42 +1,57 @@
-from flask import Flask, request, jsonify
-import pandas as pd
+from flask import Flask, request, jsonify, render_template
+import requests
+import datetime
 import joblib
+import pandas as pd
 
 app = Flask(__name__)
 
-# Load the trained model
 model = joblib.load("fever_model.pkl")
 
-# Map prediction to extra information
-info_map = {
-    "Viral Fever": ("Low", "Maybe", "Paracetamol, Rest"),
-    "Bacterial Infection": ("High", "Yes", "Antibiotics"),
-    "Typhoid": ("Moderate", "Yes", "Antibiotics, Paracetamol"),
-    "Dengue": ("High", "Yes", "Fluid intake, Paracetamol (NO NSAIDs)"),
-    "Normal": ("Low", "No", "None")
-}
+# 1. --- TEMP CHECKUP ---
+@app.route("/check_temp", methods=["GET"])
+def check_temp():
+    THINGSPEAK_URL = "https://api.thingspeak.com/channels/2914501/feeds.json?api_key=2HLDF9ZWYNV4YWUG&results=10"
 
+    response = requests.get(THINGSPEAK_URL)
+    data = response.json()
+    feeds = data.get("feeds", [])
 
-@app.route("/")
-def home():
-    return "🔥 Fever Detection API is Live! Use POST /predict"
+    if not feeds:
+        return jsonify({"status": "error", "message": "No temperature data found"})
 
+    temps = [float(f["field1"]) for f in feeds if f["field1"]]
+    if not temps:
+        return jsonify({"status": "error", "message": "No object temps found"})
+
+    avg_temp = sum(temps) / len(temps)
+    fever_detected = avg_temp >= 37.5
+
+    return jsonify({
+        "avg_temp": round(avg_temp, 2),
+        "fever": fever_detected,
+        "status": "success"
+    })
+
+# 2. --- FEVER PREDICTION ---
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        # Parse JSON input
-        data = request.get_json()
+        data = request.json
+        features = pd.DataFrame([data])
 
-        # Convert to DataFrame for model
-        df = pd.DataFrame([data])
+        prediction = model.predict(features)[0]
 
-        # Get prediction
-        prediction = model.predict(df)[0]
+        info_map = {
+            "Bacterial Infection": ["High", "Yes", "Antibiotics"],
+            "Viral Fever": ["Low", "Maybe", "Paracetamol, Rest"],
+            "Typhoid": ["Moderate", "Yes", "Antibiotics, Paracetamol"],
+            "Normal": ["Low", "No", "None"],
+            "Dengue": ["High", "Yes", "Paracetamol, Fluids"]
+        }
 
-        # Get mapped info
-        severity, consult, medicine = info_map.get(prediction, ("Unknown", "Unknown", "Unknown"))
+        severity, consult, medicine = info_map.get(prediction, ("Unknown", "Maybe", "Consult Doctor"))
 
-        # Return result
         return jsonify({
             "prediction": prediction,
             "severity": severity,
@@ -44,9 +59,14 @@ def predict():
             "suggested_medicine": medicine,
             "status": "success"
         })
-
     except Exception as e:
-        return jsonify({"error": str(e), "status": "error"}), 500
+        return jsonify({"error": str(e), "status": "error"})
+
+
+# Local test view (optional)
+@app.route("/")
+def home():
+    return render_template("index.html")  # Make sure index.html is placed inside a /templates folder
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=10000)
+    app.run(debug=True)
