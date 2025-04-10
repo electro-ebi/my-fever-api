@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Smart Fever Diagnosis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #43cea2, #185a9d);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: #fff;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(15px);
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      max-width: 600px;
+      width: 90%;
+    }
+
+    h1 { text-align: center; margin-bottom: 20px; }
+    button, input {
+      width: 100%;
+      margin-top: 12px;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      outline: none;
+    }
+
+    input {
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+    }
+
+    label {
+      margin-top: 10px;
+      display: block;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    button {
+      background: #00ffc8;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 10px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🩺 Smart Fever Diagnosis</h1>
+    
+    <button onclick="startCheckup()">🌡️ Start Check-Up</button>
+    <p id="tempStatus"></p>
+
+    <form id="bloodForm" class="hidden">
+      <label>Hemoglobin (g/dL)</label>
+      <input name="Hemoglobin" type="number" required>
+      <label>WBC (/mm³)</label>
+      <input name="WBC" type="number" required>
+      <label>Platelets (/mm³)</label>
+      <input name="Platelets" type="number" required>
+      <label>Neutrophils (%)</label>
+      <input name="Neutrophils" type="number" required>
+      <label>Lymphocytes (%)</label>
+      <input name="Lymphocytes" type="number" required>
+      <label>Monocytes (%)</label>
+      <input name="Monocytes" type="number" required>
+      <label>Eosinophils (%)</label>
+      <input name="Eosinophils" type="number" required>
+      <label>Basophils (%)</label>
+      <input name="Basophils" type="number" required>
+      <label>MCHC (g/dL)</label>
+      <input name="MCHC" type="number" required>
+      <label>RDW (%)</label>
+      <input name="RDW" type="number" required>
+      <label>PCV (%)</label>
+      <input name="PCV" type="number" required>
+
+      <button type="submit">Diagnose</button>
+    </form>
+
+    <div id="result" class="result hidden">
+      <p><strong>Prediction:</strong> <span id="prediction"></span></p>
+      <p><strong>Severity:</strong> <span id="severity"></span></p>
+      <p><strong>Consult Doctor:</strong> <span id="consult"></span></p>
+      <p><strong>Suggested Medicine:</strong> <span id="medicine"></span></p>
+    </div>
+  </div>
+
+  <script>
+    async function startCheckup() {
+      const statusEl = document.getElementById("tempStatus");
+      statusEl.innerText = "⏳ Checking temperature from device...";
+
+      try {
+        const res = await fetch("/check_temp");
+        const data = await res.json();
+
+        if (data.status === "success") {
+          statusEl.innerText = `🔥 Avg Temp: ${data.avg_temp} °C — ${data.fever ? "Fever Detected!" : "You're Normal"}`;
+
+          if (data.fever) {
+            document.getElementById("bloodForm").classList.remove("hidden");
+          }
+        } else {
+          statusEl.innerText = "❌ Could not fetch temperature.";
+        }
+      } catch (e) {
+        statusEl.innerText = "❌ Error contacting server.";
+        console.error(e);
+      }
+    }
+
+    document.getElementById("bloodForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      const json = {};
+      formData.forEach((v, k) => json[k] = parseFloat(v));
+
+      try {
+        const res = await fetch("/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(json)
+        });
+
+        const result = await res.json();
+        document.getElementById("prediction").innerText = result.prediction;
+        document.getElementById("severity").innerText = result.severity;
+        document.getElementById("consult").innerText = result.consult_doctor;
+        document.getElementById("medicine").innerText = result.suggested_medicine;
+        document.getElementById("result").classList.remove("hidden");
+      } catch (e) {
+        alert("❌ Diagnosis failed");
+        console.error(e);
+      }
+    });
+  </script>
+</body>
+</html>
