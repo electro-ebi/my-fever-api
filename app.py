@@ -1,42 +1,34 @@
-from flask import Flask, render_template, request
-import pandas as pd
+from flask import Flask, request, jsonify
 import joblib
+import numpy as np
 
+# Load model
 model = joblib.load("fever_model.pkl")
 
-info_map = {
-    "Bacterial Infection": ["High", "Yes", "Antibiotics"],
-    "Viral Fever": ["Low", "Maybe", "Paracetamol, Rest"],
-    "Typhoid": ["Moderate", "Yes", "Antibiotics, Paracetamol"],
-    "Normal": ["Low", "No", "None"],
-    "Dengue": ["High", "Yes", "Fluid Replacement, Paracetamol"]
-}
-
-
+# Create Flask app
 app = Flask(__name__)
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    result = None
-    if request.method == "POST":
-        features = [float(request.form.get(field)) for field in [
-            "Hemoglobin", "WBC", "Platelets", "Neutrophils", "Lymphocytes",
-            "Monocytes", "Eosinophils", "Basophils", "MCHC", "RDW", "PCV"
-        ]]
-        df = pd.DataFrame([features], columns=[
-            "Hemoglobin", "WBC", "Platelets", "Neutrophils", "Lymphocytes",
-            "Monocytes", "Eosinophils", "Basophils", "MCHC", "RDW", "PCV"
-        ])
-        prediction = model.predict(df)[0]
-        severity, consult, medicine = info_map[prediction]
-        result = {
-            "Fever Type": prediction,
-            "Severity": severity,
-            "Consult": consult,
-            "Medicine": medicine
-        }
-    return render_template("form.html", result=result)
+@app.route("/predict", methods=["POST"])
+def predict():
+    try:
+        data = request.get_json()
 
-# ✅ Make sure this part is included
+        # Extract features in order (ensure same order as model was trained)
+        features = [
+            data['Hemoglobin'], data['WBC'], data['Platelets'],
+            data['Neutrophils'], data['Lymphocytes'], data['Monocytes'],
+            data['Eosinophils'], data['Basophils'], data['MCHC'],
+            data['RDW'], data['PCV']
+        ]
+
+        prediction = model.predict([features])[0]
+        return jsonify({
+            "prediction": prediction,
+            "status": "success"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 if __name__ == "__main__":
     app.run(debug=True)
