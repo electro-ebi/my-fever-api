@@ -11,7 +11,7 @@ model = joblib.load("fever_model.pkl")
 # 1. --- TEMP CHECKUP ---
 @app.route("/check_temp", methods=["GET"])
 def check_temp():
-    THINGSPEAK_URL = "https://api.thingspeak.com/channels/2914501/feeds.json?api_key=2HLDF9ZWYNV4YWUG&results=10"
+    THINGSPEAK_URL = "https://api.thingspeak.com/channels/2914501/feeds.json?api_key=2HLDF9ZWYNV4YWUG&results=2"
 
     response = requests.get(THINGSPEAK_URL)
     data = response.json()
