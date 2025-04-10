@@ -1,34 +1,52 @@
 from flask import Flask, request, jsonify
+import pandas as pd
 import joblib
-import numpy as np
 
-# Load model
+app = Flask(__name__)
+
+# Load the trained model
 model = joblib.load("fever_model.pkl")
 
-# Create Flask app
-app = Flask(__name__)
+# Map prediction to extra information
+info_map = {
+    "Viral Fever": ("Low", "Maybe", "Paracetamol, Rest"),
+    "Bacterial Infection": ("High", "Yes", "Antibiotics"),
+    "Typhoid": ("Moderate", "Yes", "Antibiotics, Paracetamol"),
+    "Dengue": ("High", "Yes", "Fluid intake, Paracetamol (NO NSAIDs)"),
+    "Normal": ("Low", "No", "None")
+}
+
+
+@app.route("/")
+def home():
+    return "🔥 Fever Detection API is Live! Use POST /predict"
 
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
+        # Parse JSON input
         data = request.get_json()
 
-        # Extract features in order (ensure same order as model was trained)
-        features = [
-            data['Hemoglobin'], data['WBC'], data['Platelets'],
-            data['Neutrophils'], data['Lymphocytes'], data['Monocytes'],
-            data['Eosinophils'], data['Basophils'], data['MCHC'],
-            data['RDW'], data['PCV']
-        ]
+        # Convert to DataFrame for model
+        df = pd.DataFrame([data])
 
-        prediction = model.predict([features])[0]
+        # Get prediction
+        prediction = model.predict(df)[0]
+
+        # Get mapped info
+        severity, consult, medicine = info_map.get(prediction, ("Unknown", "Unknown", "Unknown"))
+
+        # Return result
         return jsonify({
             "prediction": prediction,
+            "severity": severity,
+            "consult_doctor": consult,
+            "suggested_medicine": medicine,
             "status": "success"
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e), "status": "error"}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=10000)
